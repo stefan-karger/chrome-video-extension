@@ -1,0 +1,7 @@
+{
+  "name": "com.stefan.hls_downloader",
+  "description": "Native host for personal HLS downloader project",
+  "path": "__HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
+}

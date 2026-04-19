@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HLS Downloader Options</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      h1 {
+        margin-top: 0;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 16px;
+      }
+
+      .label-title {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #30363d;
+        background: #161b22;
+        color: inherit;
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      button {
+        border: 1px solid #30363d;
+        background: #161b22;
+        color: inherit;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: #1f6feb;
+        border-color: #1f6feb;
+      }
+
+      .panel {
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        background: #11161d;
+        padding: 16px;
+        margin-top: 24px;
+      }
+
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        word-break: break-all;
+      }
+
+      .subtle {
+        color: #8b949e;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HLS Downloader Options</h1>
+      <p class="subtle">This version expects a locally installed native host and a system `ffmpeg` binary.</p>
+
+      <label>
+        <span class="label-title">Native host name</span>
+        <input id="native-host-name" type="text" />
+      </label>
+
+      <label>
+        <span class="label-title">ffmpeg path</span>
+        <input id="ffmpeg-path" type="text" placeholder="ffmpeg" />
+      </label>
+
+      <label>
+        <span class="label-title">Output directory</span>
+        <input id="output-dir" type="text" placeholder="Defaults to $HOME/Downloads" />
+      </label>
+
+      <div class="toolbar">
+        <button id="save-button" class="primary">Save</button>
+        <button id="ping-button">Ping native host</button>
+      </div>
+
+      <div class="panel">
+        <div class="label-title">Extension ID</div>
+        <div id="extension-id" class="mono"></div>
+      </div>
+
+      <div class="panel">
+        <div class="label-title">Host status</div>
+        <div id="host-status" class="mono subtle">Not checked yet</div>
+      </div>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HLS Downloader</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        width: 420px;
+        background: #0d1117;
+        color: #e6edf3;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+
+      .subtle {
+        color: #8b949e;
+        font-size: 12px;
+      }
+
+      .toolbar,
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .toolbar {
+        margin: 12px 0 16px;
+      }
+
+      button {
+        border: 1px solid #30363d;
+        background: #161b22;
+        color: inherit;
+        border-radius: 8px;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: #1f6feb;
+        border-color: #1f6feb;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      .card {
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        background: #11161d;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+
+      .candidate-url,
+      .status-line {
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+        word-break: break-all;
+      }
+
+      .candidate-url {
+        margin: 8px 0 12px;
+        color: #9ecbff;
+      }
+
+      .empty {
+        padding: 24px 0;
+        text-align: center;
+        color: #8b949e;
+      }
+
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        background: #1f2937;
+        color: #9fb3c8;
+      }
+
+      .status {
+        margin-bottom: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HLS Downloader</h1>
+      <div id="page-meta" class="subtle">Waiting for active tab</div>
+
+      <div class="toolbar">
+        <button id="refresh-button">Refresh</button>
+        <button id="options-button">Options</button>
+      </div>
+
+      <section id="status" class="status"></section>
+      <section id="candidates"></section>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
