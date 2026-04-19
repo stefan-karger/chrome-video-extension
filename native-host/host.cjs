@@ -111,9 +111,21 @@ function handleStartJob(payload) {
 
   const ffmpegPath = String(payload.ffmpegPath || "ffmpeg")
   const outputDir = resolveOutputDir(String(payload.outputDir || ""))
+  const outputDirError = ensureOutputDirWritable(outputDir)
+  if (outputDirError) {
+    send({
+      type: "job_error",
+      payload: {
+        jobId,
+        tabId,
+        error: `Output directory is not writable: ${outputDirError}`
+      }
+    })
+    return
+  }
+
   const outputPath = buildOutputPath(outputDir, String(payload.baseName || "video"))
   const args = buildFfmpegArgs({
-    ffmpegPath,
     inputUrl,
     outputPath,
     headers: payload.requestHeaders || {},
@@ -136,8 +148,7 @@ function handleStartJob(payload) {
     type: "job_started",
     payload: {
       jobId,
-      tabId,
-      command: [ffmpegPath, ...args].join(" ")
+      tabId
     }
   })
 
@@ -151,37 +162,39 @@ function handleStartJob(payload) {
   })
 
   const progressStream = child.stdio[3]
-  progressStream.setEncoding("utf8")
-  let progressBuffer = ""
-  progressStream.on("data", (chunk) => {
-    progressBuffer += chunk
-    const blocks = progressBuffer.split("\n")
-    progressBuffer = blocks.pop() || ""
+  if (progressStream) {
+    progressStream.setEncoding("utf8")
+    let progressBuffer = ""
+    progressStream.on("data", (chunk) => {
+      progressBuffer += chunk
+      const blocks = progressBuffer.split("\n")
+      progressBuffer = blocks.pop() || ""
 
-    const progress = {}
-    for (const line of blocks) {
-      const trimmed = line.trim()
-      if (!trimmed || !trimmed.includes("=")) {
-        continue
+      const progress = {}
+      for (const line of blocks) {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.includes("=")) {
+          continue
+        }
+
+        const [key, value] = trimmed.split("=", 2)
+        progress[key] = value
+
+        if (key === "progress") {
+          send({
+            type: "job_progress",
+            payload: {
+              jobId,
+              tabId,
+              outTime: progress.out_time || progress.out_time_ms || "",
+              speed: progress.speed || "",
+              state: value
+            }
+          })
+        }
       }
-
-      const [key, value] = trimmed.split("=", 2)
-      progress[key] = value
-
-      if (key === "progress") {
-        send({
-          type: "job_progress",
-          payload: {
-            jobId,
-            tabId,
-            outTime: progress.out_time || progress.out_time_ms || "",
-            speed: progress.speed || "",
-            state: value
-          }
-        })
-      }
-    }
-  })
+    })
+  }
 
   child.on("error", (error) => {
     send({
@@ -214,7 +227,7 @@ function handleStartJob(payload) {
           jobId,
           tabId,
           error: `ffmpeg exited with code ${code}`,
-          stderr
+          stderr: redactSensitiveText(stderr)
         }
       })
     }
@@ -283,8 +296,19 @@ function resolveOutputDir(outputDir) {
   return path.join(os.homedir(), "Downloads")
 }
 
+function ensureOutputDirWritable(outputDir) {
+  try {
+    fs.mkdirSync(outputDir, { recursive: true })
+    fs.accessSync(outputDir, fs.constants.W_OK)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : "Unknown output directory error"
+  }
+}
+
 function buildOutputPath(outputDir, baseName) {
-  const fileName = `${sanitizeFileName(baseName) || "video"}.mp4`
+  const safeBaseName = sanitizeFileName(baseName) || "video"
+  const fileName = `${safeBaseName}.mp4`
   const initialPath = path.join(outputDir, fileName)
 
   if (!fs.existsSync(initialPath)) {
@@ -293,7 +317,7 @@ function buildOutputPath(outputDir, baseName) {
 
   let index = 2
   while (true) {
-    const nextPath = path.join(outputDir, `${sanitizeFileName(baseName)} (${index}).mp4`)
+    const nextPath = path.join(outputDir, `${safeBaseName} (${index}).mp4`)
     if (!fs.existsSync(nextPath)) {
       return nextPath
     }
@@ -307,6 +331,18 @@ function sanitizeFileName(value) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120)
+}
+
+function redactSensitiveText(value) {
+  return String(value).replace(/https?:\/\/\S+/g, (raw) => {
+    try {
+      const parsed = new URL(raw)
+      parsed.search = ""
+      return parsed.toString()
+    } catch {
+      return raw
+    }
+  })
 }
 
 function send(message) {

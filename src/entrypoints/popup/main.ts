@@ -9,6 +9,7 @@ const optionsButton = must<HTMLButtonElement>("options-button")
 
 let activeTabId: number | null = null
 let currentState: TabState | null = null
+let transientError: string | null = null
 
 refreshButton.addEventListener("click", () => {
   void loadActiveTabState()
@@ -34,22 +35,32 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 void loadActiveTabState()
 
 async function loadActiveTabState(): Promise<void> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  activeTabId = tab?.id ?? null
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    activeTabId = tab?.id ?? null
 
-  if (!activeTabId) {
-    pageMeta.textContent = "No active tab"
-    currentState = null
-    render()
-    return
+    if (!activeTabId) {
+      pageMeta.textContent = "No active tab"
+      currentState = null
+      render()
+      return
+    }
+
+    const response = await chrome.runtime.sendMessage({
+      type: messageTypes.getTabState,
+      payload: { tabId: activeTabId }
+    })
+
+    if (response?.ok === false) {
+      transientError = typeof response.error === "string" ? response.error : "Failed to load tab state"
+    } else {
+      transientError = null
+      currentState = (response?.state as TabState | null) || null
+    }
+  } catch (error) {
+    transientError = error instanceof Error ? error.message : "Failed to load tab state"
   }
 
-  const response = await chrome.runtime.sendMessage({
-    type: messageTypes.getTabState,
-    payload: { tabId: activeTabId }
-  })
-
-  currentState = (response?.state as TabState | null) || null
   render()
 }
 
@@ -68,6 +79,16 @@ function render(): void {
 
 function renderStatus(state: TabState | null): void {
   const job = state?.job
+
+  if (transientError) {
+    statusRoot.innerHTML = `
+      <div class="card">
+        <div><span class="pill">ERROR</span></div>
+        <div class="status-line" style="margin-top: 8px;">${escapeHtml(transientError)}</div>
+      </div>
+    `
+    return
+  }
 
   if (!job) {
     statusRoot.innerHTML = ""
@@ -130,16 +151,33 @@ function renderCandidates(state: TabState | null): void {
         return
       }
 
-      await navigator.clipboard.writeText(button.dataset.url)
+      try {
+        await navigator.clipboard.writeText(button.dataset.url)
+      } catch (error) {
+        transientError = error instanceof Error ? error.message : "Could not copy URL"
+        renderStatus(currentState)
+      }
     })
   })
 }
 
 async function startDownload(tabId: number, candidateId: string): Promise<void> {
-  await chrome.runtime.sendMessage({
-    type: messageTypes.startDownload,
-    payload: { tabId, candidateId }
-  })
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: messageTypes.startDownload,
+      payload: { tabId, candidateId }
+    })
+
+    if (!response?.ok) {
+      throw new Error(typeof response?.error === "string" ? response.error : "Failed to start download")
+    }
+
+    transientError = null
+  } catch (error) {
+    transientError = error instanceof Error ? error.message : "Failed to start download"
+    renderStatus(currentState)
+    return
+  }
 
   await loadActiveTabState()
 }

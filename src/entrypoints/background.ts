@@ -2,7 +2,7 @@ import { defineBackground } from "wxt/utils/define-background"
 
 import { buildSuggestedBaseName } from "../lib/filename"
 import { messageTypes, type ExtensionMessage } from "../lib/messages"
-import { ensureNativePort, pingNativeHost } from "../lib/native-host"
+import { disconnectNativePort, ensureNativePort, pingNativeHost } from "../lib/native-host"
 import {
   candidateIdFor,
   headersToRecord,
@@ -74,8 +74,15 @@ async function handleMessage(message: ExtensionMessage): Promise<Record<string, 
       const response = await pingNativeHost()
       return { ok: true, response }
     }
+
+    case messageTypes.resetNativePort: {
+      disconnectNativePort()
+      return { ok: true }
+    }
   }
 }
+
+const tabUpdateQueue = new Map<number, Promise<void>>()
 
 async function capturePlaylistRequest(details: chrome.webRequest.WebRequestHeadersDetails): Promise<void> {
   if (details.tabId < 0) {
@@ -86,37 +93,54 @@ async function capturePlaylistRequest(details: chrome.webRequest.WebRequestHeade
     return
   }
 
-  const tab = await safeGetTab(details.tabId)
-  const headers = headersToRecord(details.requestHeaders)
-  const id = candidateIdFor(details.url, details.frameId)
+  await enqueueTabUpdate(details.tabId, async () => {
+    const [tab, settings] = await Promise.all([safeGetTab(details.tabId), getSettings()])
+    const headers = headersToRecord(details.requestHeaders, settings.forwardCredentialHeaders)
+    const id = candidateIdFor(details.url, details.frameId)
 
-  const state =
-    (await getTabState(details.tabId)) || {
-      tabId: details.tabId,
-      candidates: [],
-      updatedAt: Date.now()
+    const state =
+      (await getTabState(details.tabId)) || {
+        tabId: details.tabId,
+        candidates: [],
+        updatedAt: Date.now()
+      }
+
+    const candidate: TabCandidate = {
+      id,
+      url: normalizeCandidateUrl(details.url),
+      pageUrl: tab?.url,
+      pageTitle: tab?.title,
+      frameId: details.frameId,
+      seenAt: Date.now(),
+      referer: headers.referer,
+      origin: headers.origin,
+      userAgent: headers["user-agent"],
+      headers
     }
 
-  const candidate: TabCandidate = {
-    id,
-    url: normalizeCandidateUrl(details.url),
-    pageUrl: tab?.url,
-    pageTitle: tab?.title,
-    frameId: details.frameId,
-    seenAt: Date.now(),
-    referer: headers.referer,
-    origin: headers.origin,
-    userAgent: headers["user-agent"],
-    headers
-  }
+    state.pageUrl = tab?.url || state.pageUrl
+    state.pageTitle = tab?.title || state.pageTitle
+    state.updatedAt = Date.now()
+    state.candidates = dedupeCandidates([candidate, ...state.candidates]).slice(0, 12)
 
-  state.pageUrl = tab?.url || state.pageUrl
-  state.pageTitle = tab?.title || state.pageTitle
-  state.updatedAt = Date.now()
-  state.candidates = dedupeCandidates([candidate, ...state.candidates]).slice(0, 12)
+    await setTabState(state)
+    await updateBadge(details.tabId, state.candidates.length)
+  })
+}
 
-  await setTabState(state)
-  await updateBadge(details.tabId, state.candidates.length)
+function enqueueTabUpdate(tabId: number, updater: () => Promise<void>): Promise<void> {
+  const previous = tabUpdateQueue.get(tabId) || Promise.resolve()
+
+  const next = previous.catch(() => undefined).then(updater)
+  tabUpdateQueue.set(tabId, next)
+
+  next.finally(() => {
+    if (tabUpdateQueue.get(tabId) === next) {
+      tabUpdateQueue.delete(tabId)
+    }
+  })
+
+  return next
 }
 
 function dedupeCandidates(candidates: TabCandidate[]): TabCandidate[] {
@@ -147,6 +171,10 @@ async function startDownload(
   const candidate = state.candidates.find((entry) => entry.id === candidateId)
   if (!candidate) {
     throw new Error("Playlist candidate no longer exists")
+  }
+
+  if (state.job && (state.job.status === "starting" || state.job.status === "running")) {
+    throw new Error("A download is already running for this tab")
   }
 
   const settings = await getSettings()
@@ -225,7 +253,7 @@ async function handleNativeMessage(message: {
     case "job_started": {
       state.job.status = "running"
       state.job.updatedAt = Date.now()
-      state.job.details = stringValue(message.payload.command) || "ffmpeg started"
+      state.job.details = "ffmpeg started"
       break
     }
 
@@ -250,7 +278,7 @@ async function handleNativeMessage(message: {
       state.job.status = "error"
       state.job.updatedAt = Date.now()
       state.job.error = stringValue(message.payload.error) || "Download failed"
-      state.job.details = stringValue(message.payload.stderr) || state.job.error
+      state.job.details = sanitizeStatusText(stringValue(message.payload.stderr) || state.job.error)
       break
     }
 
@@ -287,4 +315,16 @@ function stringValue(value: unknown): string | null {
 
 function numberValue(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function sanitizeStatusText(value: string): string {
+  return value.replace(/https?:\/\/\S+/g, (raw) => {
+    try {
+      const parsed = new URL(raw)
+      parsed.search = ""
+      return parsed.toString()
+    } catch {
+      return raw
+    }
+  })
 }

@@ -35,12 +35,14 @@ export interface ExtensionSettings {
   nativeHostName: string
   ffmpegPath: string
   outputDir: string
+  forwardCredentialHeaders: boolean
 }
 
 export const defaultSettings: ExtensionSettings = {
   nativeHostName: "com.stefan.hls_downloader",
   ffmpegPath: "ffmpeg",
-  outputDir: ""
+  outputDir: "",
+  forwardCredentialHeaders: false
 }
 
 export function tabStateKey(tabId: number): string {
@@ -67,6 +69,10 @@ export async function getSettings(): Promise<ExtensionSettings> {
   return {
     nativeHostName: stored.nativeHostName || defaultSettings.nativeHostName,
     ffmpegPath: stored.ffmpegPath || defaultSettings.ffmpegPath,
-    outputDir: stored.outputDir || defaultSettings.outputDir
+    outputDir: stored.outputDir || defaultSettings.outputDir,
+    forwardCredentialHeaders:
+      typeof stored.forwardCredentialHeaders === "boolean"
+        ? stored.forwardCredentialHeaders
+        : defaultSettings.forwardCredentialHeaders
   }
 }

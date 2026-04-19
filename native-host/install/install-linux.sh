@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
-  printf 'Usage: %s <extension-id> <absolute-host-path>\n' "$0" >&2
+  printf 'Usage: %s <extension-id> <absolute-host-path-to-host.cjs>\n' "$0" >&2
   exit 1
 fi
 

@@ -44,8 +44,22 @@ export function normalizeCandidateUrl(rawUrl: string): string {
 }
 
 export function headersToRecord(
-  headers: chrome.webRequest.HttpHeader[] | undefined
+  headers: chrome.webRequest.HttpHeader[] | undefined,
+  includeCredentialHeaders: boolean
 ): Record<string, string> {
+  const allowedHeaders = new Set<string>([
+    "referer",
+    "origin",
+    "user-agent",
+    "accept",
+    "accept-language"
+  ])
+
+  if (includeCredentialHeaders) {
+    allowedHeaders.add("cookie")
+    allowedHeaders.add("authorization")
+  }
+
   const result: Record<string, string> = {}
 
   for (const header of headers || []) {
@@ -53,7 +67,12 @@ export function headersToRecord(
       continue
     }
 
-    result[header.name.toLowerCase()] = header.value
+    const normalizedName = header.name.toLowerCase()
+    if (!allowedHeaders.has(normalizedName)) {
+      continue
+    }
+
+    result[normalizedName] = header.value
   }
 
   return result

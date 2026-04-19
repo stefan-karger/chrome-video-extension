@@ -6,6 +6,7 @@ type NativeHostResponse = {
 }
 
 let nativePort: chrome.runtime.Port | null = null
+let nativePortHostName: string | null = null
 
 export async function pingNativeHost(): Promise<NativeHostResponse> {
   const settings = await getSettings()
@@ -18,14 +19,42 @@ export async function pingNativeHost(): Promise<NativeHostResponse> {
 }
 
 export async function ensureNativePort(): Promise<chrome.runtime.Port> {
-  if (nativePort) {
+  const settings = await getSettings()
+
+  if (nativePort && nativePortHostName === settings.nativeHostName) {
     return nativePort
   }
 
-  const settings = await getSettings()
+  if (nativePort) {
+    try {
+      nativePort.disconnect()
+    } catch {
+      // ignore disconnect errors
+    }
+    nativePort = null
+    nativePortHostName = null
+  }
+
   nativePort = chrome.runtime.connectNative(settings.nativeHostName)
+  nativePortHostName = settings.nativeHostName
   nativePort.onDisconnect.addListener(() => {
     nativePort = null
+    nativePortHostName = null
   })
   return nativePort
+}
+
+export function disconnectNativePort(): void {
+  if (!nativePort) {
+    return
+  }
+
+  try {
+    nativePort.disconnect()
+  } catch {
+    // ignore disconnect errors
+  }
+
+  nativePort = null
+  nativePortHostName = null
 }

@@ -102,7 +102,15 @@
 
       <label>
         <span class="label-title">Output directory</span>
-        <input id="output-dir" type="text" placeholder="Defaults to $HOME/Downloads" />
+        <input id="output-dir" type="text" placeholder="Defaults to your Downloads folder" />
+      </label>
+
+      <label>
+        <span class="label-title">Forward credential headers to ffmpeg</span>
+        <input id="forward-credential-headers" type="checkbox" style="width: auto" />
+        <span class="subtle"
+          >Off by default. Enable only for authenticated streams that require Cookie or Authorization headers.</span
+        >
       </label>
 
       <div class="toolbar">
